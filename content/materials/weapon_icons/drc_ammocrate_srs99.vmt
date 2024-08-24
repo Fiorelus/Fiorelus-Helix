@@ -1,0 +1,8 @@
+"UnlitGeneric" 
+{ 
+	"$basetexture"		"vgui/entities/draconic_halo/z_humammo_sniper"
+	"$vertexcolor" 		1 
+	"$vertexalpha" 		1 
+	"$nolod" 			1 
+}
+

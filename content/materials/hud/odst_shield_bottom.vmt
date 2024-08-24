@@ -1,0 +1,8 @@
+    "UnlitGeneric"
+    {
+            "$baseTexture" "hud/odst_shield_bottom"
+	"$translucent"	"1"
+	"$vertexcolor" 1
+	"$vertexalpha" 1
+	
+}
