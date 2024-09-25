@@ -62,8 +62,8 @@ end)
 function ShieldHUD()
     shieldDisplayEnabled = not shieldDisplayEnabled
     if shieldDisplayEnabled then
-        hook.Add("HUDPaint", "DrawShieldHUD", DrawShieldHUD)
+        hook.Add("HUDPaint", "DrawCombinedHUD", DrawCombinedHUD)
     else
-        hook.Remove("HUDPaint", "DrawShieldHUD")
+        hook.Remove("HUDPaint", "DrawCombinedHUD")
     end
 end

@@ -491,8 +491,6 @@ local function checkTime()
     end
 end
 
-timer.Create("CheckForDateChange", 60, 0, checkTime)
-
 concommand.Add("reclaimer_force_date", function(ply, cmd, args)
     if not ply:IsAdmin() then return end
 
