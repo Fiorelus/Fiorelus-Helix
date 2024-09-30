@@ -359,7 +359,7 @@ local function PingDisplay()
 end
 
 local function IFFDisplay()
-    local iconSize = 48
+    local iconSize = 32
 
     hook.Add("HUDPaint", "DrawSquadMemberNames", function()
         if not isInSquad then

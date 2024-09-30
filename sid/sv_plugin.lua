@@ -66,6 +66,31 @@ local function SendSquadList()
     net.Broadcast()
 end
 
+local function GetPlayerByCharacterID(characterID)
+    for _, ply in pairs(player.GetAll()) do
+        if ply:GetCharacter() and ply:GetCharacter():GetID() == characterID then
+            return ply
+        end
+    end
+    return nil
+end
+
+local function GetHealthFromData(data)
+    local decodedData = util.JSONToTable(data)
+    if decodedData and decodedData.health then
+        return tonumber(decodedData.health)
+    end
+    return 100
+end
+
+local function IsInSquad(ply)
+    local characterID = ply:GetCharacter():GetID()
+    local squadID = sql.QueryValue("SELECT squad_id FROM ix_squad_roles WHERE member_cid = " .. sql.SQLStr(tostring(characterID)))
+    local inSquad = squadID ~= nil
+
+    return inSquad
+end
+
 net.Receive("ixSquadCreate", function(_, ply)
     local squadName = net.ReadString() or ""
     local characterID = ply:GetCharacter():GetID()
@@ -212,23 +237,6 @@ net.Receive("ixGetSquadList", function(_, ply)
     SendSquadList()
 end)
 
-local function GetPlayerByCharacterID(characterID)
-    for _, ply in pairs(player.GetAll()) do
-        if ply:GetCharacter() and ply:GetCharacter():GetID() == characterID then
-            return ply
-        end
-    end
-    return nil
-end
-
-local function GetHealthFromData(data)
-    local decodedData = util.JSONToTable(data)
-    if decodedData and decodedData.health then
-        return tonumber(decodedData.health)
-    end
-    return 100
-end
-
 net.Receive("ixGetSquadInfo", function(_, ply)
     local characterID = ply:GetCharacter():GetID()
     local squadID = sql.QueryValue("SELECT squad_id FROM ix_squad_roles WHERE member_cid = " .. sql.SQLStr(tostring(characterID)))
@@ -246,9 +254,14 @@ net.Receive("ixGetSquadInfo", function(_, ply)
 
     local squadMembers = sql.Query(query)
 
+    if not squadMembers then
+        return
+    end
+
     for _, member in ipairs(squadMembers) do
         local player = GetPlayerByCharacterID(tonumber(member.member_cid))
-        if player then
+
+        if IsValid(player) then
             local healthPercentage = (player:Health() / player:GetMaxHealth()) * 100
             member.health = math.Round(healthPercentage)
         else
@@ -256,29 +269,23 @@ net.Receive("ixGetSquadInfo", function(_, ply)
         end
     end
 
-    net.Start("ixSquadInfo")
-    net.WriteString(squadMembers[1].squad_name)
-    net.WriteTable(squadMembers)
-    net.Send(ply)
+    for _, member in ipairs(squadMembers) do
+        local player = GetPlayerByCharacterID(tonumber(member.member_cid))
+        if IsValid(player) then
+            net.Start("ixSquadInfo")
+            net.WriteString(squadMembers[1].squad_name)
+            net.WriteTable(squadMembers)
+            net.Send(player)
+        end
+    end
 end)
-
-local unitToMeter = 1 / 26
-
-local function IsInSquad(ply)
-    local characterID = ply:GetCharacter():GetID()
-    local squadID = sql.QueryValue("SELECT squad_id FROM ix_squad_roles WHERE member_cid = " .. sql.SQLStr(tostring(characterID)))
-    local inSquad = squadID ~= nil
-
-    return inSquad
-end
 
 net.Receive("ixSendPing", function(len, ply)
     local pingPos = net.ReadVector()
     local name = net.ReadString()
 
     local playerPos = ply:GetPos()
-    local distanceUnits = playerPos:Distance(pingPos)
-    local distanceMeters = distanceUnits * unitToMeter
+    local distanceMeters = math.Round(playerPos:Distance(pingPos) * 0.01905, 2)
 
     for _, v in ipairs(player.GetAll()) do
         if IsInSquad(v) then

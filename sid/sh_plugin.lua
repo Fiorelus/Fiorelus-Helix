@@ -65,7 +65,7 @@ ix.command.Add("Squad", {
         for _, memberID in ipairs(squadMembers) do
             local member = GetPlayerByCharacterID(memberID)
             if IsValid(member) then
-                ix.chat.Send(member, "squad", formattedMessage, false, client)
+                ix.chat.Send(client, "squad", formattedMessage, false, member)
             end
         end
     end
