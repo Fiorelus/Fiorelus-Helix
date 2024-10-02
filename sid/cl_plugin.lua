@@ -30,6 +30,13 @@ net.Receive("ixSquadInfo", function()
     UpdateSquadData(squadName, squadMembers)
 end)
 
+net.Receive("ixSquadUpdate", function()
+    local squadName = string.upper(net.ReadString())
+    local updatedMembers = net.ReadTable()
+
+    UpdateSquadData(squadName, updatedMembers)
+end)
+
 local function CreateOrUpdateSquadMenu()
     if IsValid(squadFrame) then
         squadFrame:Show()
@@ -296,9 +303,8 @@ local function PingDisplay()
     net.Receive("ixReceivePing", function()
         local pingPos = net.ReadVector()
         local name = net.ReadString()
-        local pingDistance = net.ReadFloat()
 
-        activePing = { pos = pingPos, name = name, distance = pingDistance, time = CurTime() }
+        activePing = { pos = pingPos, name = name, time = CurTime() }
     end)
 
     hook.Add("PlayerButtonDown", "PingSystem", function(ply, button)
@@ -312,7 +318,6 @@ local function PingDisplay()
                 net.Start("ixSendPing")
                 net.WriteVector(pingPos)
                 net.WriteString(ply:GetName())
-                net.WriteFloat(ply:GetPos():Distance(pingPos))
                 net.SendToServer()
 
                 timer.Simple(3, function()
@@ -334,7 +339,8 @@ local function PingDisplay()
         if activePing then
             local pos = activePing.pos
             local name = activePing.name
-            local distance = activePing.distance
+
+            local distance = LocalPlayer():GetPos():Distance(pos) * 0.01905
 
             if pos then
                 local screenPos = pos:ToScreen()

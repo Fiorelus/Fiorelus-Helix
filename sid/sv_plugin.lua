@@ -38,6 +38,7 @@ util.AddNetworkString("ixReceivePing")
 util.AddNetworkString("ixSquadLeaveClient")
 util.AddNetworkString("ixSquadJoinClient")
 util.AddNetworkString("ixSetSquadRole")
+util.AddNetworkString("ixSquadUpdate")
 
 local function SendSquadList()
     local squads = sql.Query("SELECT squad_name, leader_cid FROM ix_squads")
@@ -167,6 +168,18 @@ net.Receive("ixSquadDisband", function(_, ply)
         return
     end
 
+    local squadMembers = sql.Query("SELECT member_cid FROM ix_squad_roles WHERE squad_id = " .. sql.SQLStr(squadID))
+
+    for _, member in ipairs(squadMembers) do
+        local player = GetPlayerByCharacterID(tonumber(member.member_cid))
+        if IsValid(player) then
+            net.Start("ixSquadLeaveClient")
+            net.Send(player)
+
+            player:ChatPrint("Your squad has been disbanded by the leader.")
+        end
+    end
+
     local rolesQuery = "DELETE FROM ix_squad_roles WHERE squad_id = " .. sql.SQLStr(squadID)
     local rolesSuccess = sql.Query(rolesQuery)
 
@@ -213,22 +226,38 @@ net.Receive("ixSquadLeave", function(_, ply)
         return
     end
 
-    local remainingMembers = sql.QueryValue("SELECT COUNT(*) FROM ix_squad_roles WHERE squad_id = " .. sql.SQLStr(squadID))
-    if tonumber(remainingMembers) == 0 then
-        local squadQuery = "DELETE FROM ix_squads WHERE id = " .. sql.SQLStr(squadID)
-        local squadSuccess = sql.Query(squadQuery)
-
-        if squadSuccess == false then
-            ply:ChatPrint("Failed to disband squad.")
-        else
-            ply:ChatPrint("Squad disbanded successfully.")
-        end
-    else
-        ply:ChatPrint("You have left the squad successfully.")
-    end
-
     net.Start("ixSquadLeaveClient")
     net.Send(ply)
+
+    local query = [[
+        SELECT ix_squad_roles.member_cid, ix_squad_roles.role, ix_characters.name, ix_characters.data, ix_squads.squad_name
+        FROM ix_squad_roles
+        JOIN ix_characters ON ix_squad_roles.member_cid = ix_characters.id
+        JOIN ix_squads ON ix_squads.id = ix_squad_roles.squad_id
+        WHERE ix_squad_roles.squad_id = ]] .. sql.SQLStr(squadID)
+
+    local squadMembers = sql.Query(query)
+
+    for _, member in ipairs(squadMembers) do
+        local player = GetPlayerByCharacterID(tonumber(member.member_cid))
+
+        if IsValid(player) then
+            local healthPercentage = (player:Health() / player:GetMaxHealth()) * 100
+            member.health = math.Round(healthPercentage)
+        else
+            member.health = GetHealthFromData(member.data) or 100
+        end
+    end
+
+    for _, member in ipairs(squadMembers) do
+        local player = GetPlayerByCharacterID(tonumber(member.member_cid))
+        if IsValid(player) then
+            net.Start("ixSquadInfo")
+            net.WriteString(squadMembers[1].squad_name)
+            net.WriteTable(squadMembers)
+            net.Send(player)
+        end
+    end
 
     SendSquadList()
 end)
@@ -284,16 +313,11 @@ net.Receive("ixSendPing", function(len, ply)
     local pingPos = net.ReadVector()
     local name = net.ReadString()
 
-    local playerPos = ply:GetPos()
-    local distanceMeters = math.Round(playerPos:Distance(pingPos) * 0.01905, 2)
-
     for _, v in ipairs(player.GetAll()) do
         if IsInSquad(v) then
             net.Start("ixReceivePing")
             net.WriteVector(pingPos)
             net.WriteString(name)
-            net.WriteFloat(distanceMeters)
-            net.WriteEntity(ply)
             net.Send(v)
         end
     end
