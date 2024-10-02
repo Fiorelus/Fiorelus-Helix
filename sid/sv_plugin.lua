@@ -226,6 +226,8 @@ net.Receive("ixSquadLeave", function(_, ply)
         return
     end
 
+    ply:ChatPrint("You have left the squad successfully.")
+
     net.Start("ixSquadLeaveClient")
     net.Send(ply)
 
