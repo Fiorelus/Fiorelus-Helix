@@ -37,87 +37,176 @@ net.Receive("ixSquadUpdate", function()
     UpdateSquadData(squadName, updatedMembers)
 end)
 
-local function CreateOrUpdateSquadMenu()
+function CreateCustomFrame(message, title, confirmText, cancelText, confirmCallback, cancelCallback)
+    local tempLabel = vgui.Create("DLabel")
+    tempLabel:SetText(message)
+    tempLabel:SizeToContents()
+
+    local frameWidth = tempLabel:GetWide() + 50
+    local frameHeight = 120
+
+    local messageFrame = vgui.Create("DFrame")
+    messageFrame:SetSize(frameWidth, frameHeight)
+    messageFrame:Center()
+    messageFrame:SetTitle("")
+    messageFrame:MakePopup()
+
+    messageFrame.Paint = function(self, w, h)
+        draw.RoundedBox(6, 0, 0, w, h, Color(3, 7, 16, 225))
+        draw.RoundedBoxEx(6, 0, 0, w, 25, Color(3, 7, 16), true, true, false, false)
+        draw.SimpleText(title, "SquadListFont", 10, 5, Color(255, 0, 0), TEXT_ALIGN_LEFT, TEXT_ALIGN_TOP)
+    end
+
+    local messageLabel = vgui.Create("DLabel", messageFrame)
+    messageLabel:SetText(message)
+    messageLabel:SetTextColor(Color(241, 241, 241))
+    messageLabel:SizeToContents()
+    messageLabel:SetPos(25, 40)
+
+    local confirmButton = vgui.Create("DButton", messageFrame)
+    confirmButton:SetText(confirmText)
+    confirmButton:SetPos(25, 80)
+    confirmButton:SetSize(120, 30)
+    confirmButton.DoClick = function()
+        if confirmCallback then confirmCallback() end
+        messageFrame:Close()
+    end
+
+    local cancelButton = vgui.Create("DButton", messageFrame)
+    cancelButton:SetText(cancelText)
+    cancelButton:SetPos(frameWidth - 145, 80)
+    cancelButton:SetSize(120, 30)
+    cancelButton.DoClick = function()
+        if cancelCallback then cancelCallback() end
+        messageFrame:Close()
+    end
+
+    tempLabel:Remove()
+    return messageFrame
+end
+
+local function SquadMenu()
     if IsValid(squadFrame) then
         squadFrame:Show()
-        squadList:Clear()
     else
         squadFrame = vgui.Create("DFrame")
-        squadFrame:SetTitle("Squad Management")
+        squadFrame:SetTitle("")
         squadFrame:SetSize(600, 400)
         squadFrame:Center()
         squadFrame:MakePopup()
 
-        squadList = vgui.Create("DListView", squadFrame)
-        squadList:SetPos(20, 40)
-        squadList:SetSize(560, 200)
-        squadList:AddColumn("Squad Name")
-        squadList:AddColumn("Members Count")
+        squadFrame.Paint = function(self, w, h)
+            draw.RoundedBox(6, 0, 0, w, h, Color(3, 7, 16, 225))
+            draw.RoundedBoxEx(6, 0, 0, w, 25, Color(3, 7, 16), true, true, false, false)
+            draw.SimpleText("Squad Identification System", "SquadRoleFont", 8, 6, Color(241, 241, 241), TEXT_ALIGN_LEFT, TEXT_ALIGN_TOP)
+        end
+
+        local squadScroll = vgui.Create("DScrollPanel", squadFrame)
+        squadScroll:SetSize(560, 275)
+        squadScroll:SetPos(20, 30)
+
+        local squadListPanel = vgui.Create("DIconLayout", squadScroll)
+        squadListPanel:SetSize(560, 0)
+        squadListPanel:SetSpaceY(5)
+
+        local function PopulateSquadList(squads)
+            squadListPanel:Clear()
+
+            for _, squad in pairs(squads) do
+                local squadEntry = squadListPanel:Add("DPanel")
+                squadEntry:SetSize(560, 40)
+                squadEntry.Paint = function(self, w, h)
+                    local bgColor = self:IsHovered() and Color(4, 8, 18, 225) or Color(3, 7, 16, 175)
+                    draw.RoundedBox(6, 0, 0, w, h, bgColor)
+                    draw.SimpleText(squad.name, "SquadListFont", 20, h / 2 - 8, Color(255, 255, 255), TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
+                    draw.SimpleText("Lead: " .. squad.leader, "SquadListFont", 20, h / 2 + 8, Color(225, 225, 225), TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
+                    draw.SimpleText("Members: " .. squad.count, "SquadListFont", w - 20, h / 2, Color(225, 225, 225), TEXT_ALIGN_RIGHT, TEXT_ALIGN_CENTER)
+                end
+
+                squadEntry.OnCursorEntered = function(self)
+                    self:SetCursor("hand")
+                end
+
+                squadEntry.OnMousePressed = function()
+                    net.Start("ixSquadJoin")
+                    net.WriteString(squad.name)
+                    net.SendToServer()
+                end
+            end
+        end
+
+        net.Receive("ixSquadList", function()
+            local squads = net.ReadTable()
+            PopulateSquadList(squads)
+        end)
 
         local createButton = vgui.Create("DButton", squadFrame)
-        createButton:SetText("Create Squad")
-        createButton:SetPos(20, 250)
-        createButton:SetSize(270, 40)
+        createButton:SetText("")
+        createButton:SetPos(20, 310)
+        createButton:SetSize(560, 35)
+        createButton:SetColor(Color(255, 255, 255))
+        createButton.Paint = function(self, w, h)
+            local bgColor = self:IsHovered() and Color(4, 8, 18, 225) or Color(3, 7, 16, 175)
+            draw.RoundedBox(6, 0, 0, w, h, bgColor)
+            draw.SimpleText("Create Squad", "SquadListFont", w / 2, h / 2, Color(255, 255, 255), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+        end
         createButton.DoClick = function()
-            Derma_StringRequest("Create Squad", "Enter new squad name:", "", function(text)
+            Derma_StringRequest("Create Squad", "Enter new squad name:", "", function(squadName)
                 if text ~= "" then
                     net.Start("ixSquadCreate")
-                    net.WriteString(text)
+                    net.WriteString(squadName)
                     net.SendToServer()
                 end
             end)
         end
 
-        local joinButton = vgui.Create("DButton", squadFrame)
-        joinButton:SetText("Join Squad")
-        joinButton:SetPos(310, 250)
-        joinButton:SetSize(270, 40)
-        joinButton.DoClick = function()
-            local selectedLine = squadList:GetSelectedLine()
-            if selectedLine then
-                local squadName = squadList:GetLine(selectedLine):GetValue(1)
-                net.Start("ixSquadJoin")
-                net.WriteString(squadName)
-                net.SendToServer()
-            else
-                chat.AddText(Color(255, 0, 0), "Please select a squad to join.")
-            end
-        end
-
         local leaveButton = vgui.Create("DButton", squadFrame)
-        leaveButton:SetText("Leave Squad")
-        leaveButton:SetPos(20, 300)
-        leaveButton:SetSize(270, 40)
+        leaveButton:SetText("")
+        leaveButton:SetPos(20, 350)
+        leaveButton:SetSize(270, 35)
+        leaveButton.Paint = function(self, w, h)
+            local bgColor = self:IsHovered() and Color(4, 8, 18, 225) or Color(3, 7, 16, 175)
+            draw.RoundedBox(6, 0, 0, w, h, bgColor)
+            draw.SimpleText("Leave Squad", "SquadListFont", w / 2, h / 2, Color(255, 255, 255), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+        end
         leaveButton.DoClick = function()
-            Derma_Query("Are you sure you want to leave your current squad?", "Leave", "Yes", function()
-                net.Start("ixSquadLeave")
-                net.SendToServer()
-            end, "No")
+            CreateCustomFrame(
+                    "Are you sure you want to leave your current squad?",
+                    "Leave Squad",
+                    "Yes",
+                    "No",
+                    function()
+                        net.Start("ixSquadLeave")
+                        net.SendToServer()
+                    end,
+                    nil
+            )
         end
 
         local disbandButton = vgui.Create("DButton", squadFrame)
-        disbandButton:SetText("Disband Squad")
-        disbandButton:SetPos(310, 300)
-        disbandButton:SetSize(270, 40)
+        disbandButton:SetText("")
+        disbandButton:SetPos(310, 350)
+        disbandButton:SetSize(270, 35)
+        disbandButton.Paint = function(self, w, h)
+            local bgColor = self:IsHovered() and Color(4, 8, 18, 225) or Color(3, 7, 16, 175)
+            draw.RoundedBox(6, 0, 0, w, h, bgColor)
+            draw.SimpleText("Disband Squad", "SquadListFont", w / 2, h / 2, Color(255, 255, 255), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+        end
         disbandButton.DoClick = function()
-            Derma_Query("Are you sure you want to disband your current squad?", "Disband", "Yes", function()
-                net.Start("ixSquadDisband")
-                net.SendToServer()
-            end, "No")
+            CreateCustomFrame(
+                    "Are you sure you want to disband your current squad?",
+                    "Disband Squad",
+                    "Yes",
+                    "No",
+                    function()
+                        net.Start("ixSquadDisband")
+                        net.SendToServer()
+                    end,
+                    nil
+            )
         end
     end
 end
-
-net.Receive("ixSquadList", function()
-    local squads = net.ReadTable()
-
-    if IsValid(squadList) then
-        squadList:Clear()
-        for _, squad in pairs(squads) do
-            squadList:AddLine(squad.name, squad.count)
-        end
-    end
-end)
 
 local function GetHealthColor(healthPercent)
     local color
@@ -141,24 +230,6 @@ local function GetRankAndLastName(name)
 end
 
 local function DrawSquadOverlay()
-    surface.CreateFont("SquadTitleFont", {
-        font = "Coolvetica",
-        size = 32,
-        weight = 700,
-    })
-
-    surface.CreateFont("SquadMemberFont", {
-        font = "Coolvetica",
-        size = 18,
-        weight = 500,
-    })
-
-    surface.CreateFont("SquadRoleFont", {
-        font = "Coolvetica",
-        size = 14,
-        weight = 500,
-    })
-
     if squadData.name ~= "" and #squadData.members > 0 then
         isInSquad = true
     else
@@ -420,7 +491,7 @@ local function IFFDisplay()
 end
 
 net.Receive("ixOpenSquadMenu", function()
-    CreateOrUpdateSquadMenu()
+    SquadMenu()
     net.Start("ixGetSquadList")
     net.SendToServer()
 end)

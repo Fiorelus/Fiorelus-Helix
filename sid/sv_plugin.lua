@@ -41,23 +41,17 @@ util.AddNetworkString("ixSetSquadRole")
 util.AddNetworkString("ixSquadUpdate")
 
 local function SendSquadList()
-    local squads = sql.Query("SELECT squad_name, leader_cid FROM ix_squads")
-
     local squadData = {}
 
-    if squads then
-        for _, squad in ipairs(squads) do
-            local squadName = squad.squad_name
-            local leaderCID = squad.leader_cid
+    local result = sql.Query("SELECT ix_squads.id, ix_squads.squad_name, ix_squads.leader_cid, COUNT(ix_squad_roles.member_cid) AS member_count FROM ix_squads LEFT JOIN ix_squad_roles ON ix_squads.id = ix_squad_roles.squad_id GROUP BY ix_squads.id")
 
-            local members = sql.Query("SELECT member_cid, role FROM ix_squad_roles WHERE squad_id = (SELECT id FROM ix_squads WHERE squad_name = " .. sql.SQLStr(squadName) .. ")")
-            if not members then members = {} end
-
+    if result then
+        for _, row in pairs(result) do
+            local leaderName = sql.QueryValue("SELECT name FROM ix_characters WHERE id = " .. sql.SQLStr(row.leader_cid)) or "Unknown"
             table.insert(squadData, {
-                name = squadName,
-                leader = leaderCID,
-                members = members,
-                count = #members
+                name = row.squad_name,
+                count = row.member_count,
+                leader = leaderName
             })
         end
     end
@@ -96,12 +90,13 @@ net.Receive("ixSquadCreate", function(_, ply)
     local squadName = net.ReadString() or ""
     local characterID = ply:GetCharacter():GetID()
 
-    if squadName == "" or not characterID then
+    local normalizedSquadName = string.lower(squadName)
+    if normalizedSquadName == "" or not characterID then
         ply:ChatPrint("Invalid squad name or character.")
         return
     end
 
-    local nameResult = sql.QueryValue("SELECT squad_name FROM ix_squads WHERE squad_name = " .. sql.SQLStr(squadName))
+    local nameResult = sql.QueryValue("SELECT squad_name FROM ix_squads WHERE squad_name = " .. sql.SQLStr(normalizedSquadName))
     if nameResult then
         ply:ChatPrint("Squad already exists.")
         return
@@ -133,10 +128,15 @@ net.Receive("ixSquadJoin", function(_, ply)
         return
     end
 
-    local currentSquadID = sql.QueryValue("SELECT squad_id FROM ix_squad_roles WHERE member_cid = " .. sql.SQLStr(tostring(characterID)) .. " AND role = 'leader'")
-    if currentSquadID then
+    local currentLeadID = sql.QueryValue("SELECT squad_id FROM ix_squad_roles WHERE member_cid = " .. sql.SQLStr(tostring(characterID)) .. " AND role = 'leader'")
+    if currentLeadID then
         ply:ChatPrint("You are already a leader of a squad and cannot join another squad.")
         return
+    end
+
+    local currentSquadID = sql.QueryValue("SELECT squad_id FROM ix_squad_roles WHERE member_cid = " .. sql.SQLStr(tostring(characterID)))
+    if currentSquadID then
+        sql.Query("DELETE FROM ix_squad_roles WHERE member_cid = " .. sql.SQLStr(tostring(characterID)))
     end
 
     local squadID = sql.QueryValue("SELECT id FROM ix_squads WHERE squad_name = " .. sql.SQLStr(squadName))

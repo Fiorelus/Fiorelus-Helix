@@ -6,6 +6,36 @@ ix.util.Include("items/sh_sid.lua")
 ix.util.Include("cl_plugin.lua")
 ix.util.Include("sv_plugin.lua")
 
+surface.CreateFont("SquadTitleFont", {
+    font = "Coolvetica",
+    size = 32,
+    weight = 700,
+})
+
+surface.CreateFont("SquadMemberFont", {
+    font = "Coolvetica",
+    size = 18,
+    weight = 500,
+})
+
+surface.CreateFont("SquadRoleFont", {
+    font = "Coolvetica",
+    size = 14,
+    weight = 500,
+})
+
+surface.CreateFont("SquadListFont", {
+    font = "Coolvetica",
+    size = 18,
+    weight = 500,
+})
+
+surface.CreateFont("SquadListHeaderFont", {
+    font = "Coolvetica",
+    size = 22,
+    weight = 700,
+})
+
 local function GetSquadMembers(characterID)
     local squadID = sql.QueryValue("SELECT squad_id FROM ix_squad_roles WHERE member_cid = " .. sql.SQLStr(tostring(characterID)))
 
