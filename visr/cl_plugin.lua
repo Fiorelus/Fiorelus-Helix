@@ -1,4 +1,5 @@
 local VISRActive = false
+local FACTION_ODST = FACTION_ODST
 
 local function IsInList(ent, list)
     local class = ent:GetClass()
@@ -34,20 +35,26 @@ local function AddVISRHalo()
     end
 
     if #allies > 0 then
-        halo.Add(allies, HaloVISR.HueAlly, 1, 1, 1, true, false)
+        halo.Add(allies, HaloVISR.HueAlly, 2, 2, 1, true, false)
     end
     if #enemies > 0 then
-        halo.Add(enemies, HaloVISR.HueEnemy, 1, 1, 1, true, false)
+        halo.Add(enemies, HaloVISR.HueEnemy, 2, 2, 1, true, false)
     end
     if #corpses > 0 then
-        halo.Add(corpses, HaloVISR.HueCorpse, 1, 1, 1, true, false)
+        halo.Add(corpses, HaloVISR.HueCorpse, 2, 2, 1, true, false)
     end
     if #neutrals > 0 then
-        halo.Add(neutrals, HaloVISR.HueNeutral, 1, 1, 1, true, false)
+        halo.Add(neutrals, HaloVISR.HueNeutral, 2, 2, 1, true, false)
     end
 end
 
 function ToggleVISR()
+    local ply = LocalPlayer()
+
+    if ply:Team() ~= FACTION_ODST then
+        return
+    end
+
     VISRActive = not VISRActive
     if VISRActive then
         hook.Add("PreDrawHalos", "AddVISRHalo", AddVISRHalo)
@@ -57,3 +64,7 @@ function ToggleVISR()
         LocalPlayer():EmitSound("VISR.Off")
     end
 end
+
+concommand.Add("visr_toggle", function(ply, cmd, args)
+    ToggleVISR()
+end)

@@ -82,3 +82,7 @@ function ToggleNightVision()
         DrawBloom(0, 0, 0, 0, 0, 0, 0, 0, 0)
     end
 end
+
+concommand.Add("nvg_toggle", function(ply, cmd, args)
+    ToggleNightVision()
+end)
