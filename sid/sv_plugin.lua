@@ -42,12 +42,24 @@ util.AddNetworkString("ixSquadUpdate")
 
 local function SendSquadList()
     local squadData = {}
+    local characterNameMap = {}
+
+    local characterResults = sql.Query("SELECT id, name FROM ix_characters")
+
+    if characterResults then
+        for _, row in ipairs(characterResults) do
+            local charID = tonumber(row.id)
+            characterNameMap[charID] = row.name
+        end
+    end
 
     local result = sql.Query("SELECT ix_squads.id, ix_squads.squad_name, ix_squads.leader_cid, COUNT(ix_squad_roles.member_cid) AS member_count FROM ix_squads LEFT JOIN ix_squad_roles ON ix_squads.id = ix_squad_roles.squad_id GROUP BY ix_squads.id")
 
     if result then
         for _, row in pairs(result) do
-            local leaderName = sql.QueryValue("SELECT name FROM ix_characters WHERE id = " .. sql.SQLStr(row.leader_cid)) or "Unknown"
+            local leaderCID = tonumber(row.leader_cid)
+            local leaderName = characterNameMap[leaderCID]
+
             table.insert(squadData, {
                 name = row.squad_name,
                 count = row.member_count,
@@ -62,8 +74,10 @@ local function SendSquadList()
 end
 
 local function GetPlayerByCharacterID(characterID)
+    characterID = tonumber(characterID)
     for _, ply in pairs(player.GetAll()) do
-        if ply:GetCharacter() and ply:GetCharacter():GetID() == characterID then
+        local playerChar = ply:GetCharacter()
+        if playerChar and tonumber(playerChar:GetID()) == characterID then
             return ply
         end
     end
@@ -80,7 +94,7 @@ end
 
 local function IsInSquad(ply)
     local characterID = ply:GetCharacter():GetID()
-    local squadID = sql.QueryValue("SELECT squad_id FROM ix_squad_roles WHERE member_cid = " .. sql.SQLStr(tostring(characterID)))
+    local squadID = sql.QueryValue("SELECT squad_id FROM ix_squad_roles WHERE member_cid = " .. sql.SQLStr(characterID))
     local inSquad = squadID ~= nil
 
     return inSquad
@@ -104,14 +118,14 @@ net.Receive("ixSquadCreate", function(_, ply)
 
     local leaderResult = sql.Query("SELECT squad_name FROM ix_squads WHERE leader_cid = " .. sql.SQLStr(characterID))
     if leaderResult and #leaderResult > 0 then
-        ply:ChatPrint("You are already leading a squad. Disband your current squad before creating a new one.")
+        ply:ChatPrint("You are already leading a squad, disband your current squad before creating a new one.")
         return
     end
 
     local currentTime = os.time()
-    sql.Query("INSERT INTO ix_squads (squad_name, leader_cid, created_at) VALUES (" .. sql.SQLStr(squadName) .. ", " .. sql.SQLStr(tostring(characterID)) .. ", " .. sql.SQLStr(tostring(currentTime)) .. ")")
+    sql.Query("INSERT INTO ix_squads (squad_name, leader_cid, created_at) VALUES (" .. sql.SQLStr(squadName) .. ", " .. sql.SQLStr(characterID) .. ", " .. sql.SQLStr(currentTime) .. ")")
     local squadID = sql.QueryValue("SELECT last_insert_rowid()")
-    sql.Query("INSERT INTO ix_squad_roles (squad_id, member_cid, role) VALUES (" .. sql.SQLStr(squadID) .. ", " .. sql.SQLStr(tostring(characterID)) .. ", 'leader')")
+    sql.Query("INSERT INTO ix_squad_roles (squad_id, member_cid, role) VALUES (" .. sql.SQLStr(squadID) .. ", " .. sql.SQLStr(characterID) .. ", 'leader')")
 
     net.Start("ixSquadJoinClient")
     net.Send(ply)
@@ -128,15 +142,16 @@ net.Receive("ixSquadJoin", function(_, ply)
         return
     end
 
-    local currentLeadID = sql.QueryValue("SELECT squad_id FROM ix_squad_roles WHERE member_cid = " .. sql.SQLStr(tostring(characterID)) .. " AND role = 'leader'")
+    local currentLeadID = sql.QueryValue("SELECT squad_id FROM ix_squad_roles WHERE member_cid = " .. sql.SQLStr(characterID) .. " AND role = 'leader'")
     if currentLeadID then
         ply:ChatPrint("You are already a leader of a squad and cannot join another squad.")
         return
     end
 
-    local currentSquadID = sql.QueryValue("SELECT squad_id FROM ix_squad_roles WHERE member_cid = " .. sql.SQLStr(tostring(characterID)))
+    local currentSquadID = sql.QueryValue("SELECT squad_id FROM ix_squad_roles WHERE member_cid = " .. sql.SQLStr(characterID))
     if currentSquadID then
-        sql.Query("DELETE FROM ix_squad_roles WHERE member_cid = " .. sql.SQLStr(tostring(characterID)))
+        ply:ChatPrint("You must leave your current squad before joining a new one.")
+        return
     end
 
     local squadID = sql.QueryValue("SELECT id FROM ix_squads WHERE squad_name = " .. sql.SQLStr(squadName))
@@ -145,13 +160,13 @@ net.Receive("ixSquadJoin", function(_, ply)
         return
     end
 
-    local isMember = sql.Query("SELECT 1 FROM ix_squad_roles WHERE squad_id = " .. sql.SQLStr(squadID) .. " AND member_cid = " .. sql.SQLStr(tostring(characterID)))
+    local isMember = sql.Query("SELECT 1 FROM ix_squad_roles WHERE squad_id = " .. sql.SQLStr(squadID) .. " AND member_cid = " .. sql.SQLStr(characterID))
     if isMember and #isMember > 0 then
         ply:ChatPrint("You are already a member of this squad.")
         return
     end
 
-    sql.Query("INSERT INTO ix_squad_roles (squad_id, member_cid, role) VALUES (" .. sql.SQLStr(squadID) .. ", " .. sql.SQLStr(tostring(characterID)) .. ", 'member')")
+    sql.Query("INSERT INTO ix_squad_roles (squad_id, member_cid, role) VALUES (" .. sql.SQLStr(squadID) .. ", " .. sql.SQLStr(characterID) .. ", 'member')")
 
     net.Start("ixSquadJoinClient")
     net.Send(ply)
@@ -162,7 +177,7 @@ end)
 net.Receive("ixSquadDisband", function(_, ply)
     local characterID = ply:GetCharacter():GetID()
 
-    local squadID = sql.QueryValue("SELECT squad_id FROM ix_squad_roles WHERE member_cid = " .. sql.SQLStr(tostring(characterID)) .. " AND role = 'leader'")
+    local squadID = sql.QueryValue("SELECT squad_id FROM ix_squad_roles WHERE member_cid = " .. sql.SQLStr(characterID) .. " AND role = 'leader'")
     if not squadID then
         ply:ChatPrint("You are not a leader of any squad.")
         return
@@ -171,7 +186,7 @@ net.Receive("ixSquadDisband", function(_, ply)
     local squadMembers = sql.Query("SELECT member_cid FROM ix_squad_roles WHERE squad_id = " .. sql.SQLStr(squadID))
 
     for _, member in ipairs(squadMembers) do
-        local player = GetPlayerByCharacterID(tonumber(member.member_cid))
+        local player = GetPlayerByCharacterID(member.member_cid)
         if IsValid(player) then
             net.Start("ixSquadLeaveClient")
             net.Send(player)
@@ -206,19 +221,19 @@ end)
 net.Receive("ixSquadLeave", function(_, ply)
     local characterID = ply:GetCharacter():GetID()
 
-    local squadID = sql.QueryValue("SELECT squad_id FROM ix_squad_roles WHERE member_cid = " .. sql.SQLStr(tostring(characterID)))
+    local squadID = sql.QueryValue("SELECT squad_id FROM ix_squad_roles WHERE member_cid = " .. sql.SQLStr(characterID))
     if not squadID then
         ply:ChatPrint("You are not part of any squad.")
         return
     end
 
-    local isLeader = sql.QueryValue("SELECT COUNT(*) FROM ix_squad_roles WHERE member_cid = " .. sql.SQLStr(tostring(characterID)) .. " AND role = 'leader'")
+    local isLeader = sql.QueryValue("SELECT COUNT(*) FROM ix_squad_roles WHERE member_cid = " .. sql.SQLStr(characterID) .. " AND role = 'leader'")
     if tonumber(isLeader) > 0 then
-        ply:ChatPrint("You are leading a squad. Disband your squad if you wish to leave.")
+        ply:ChatPrint("You are leading a squad, disband your squad if you wish to leave.")
         return
     end
 
-    local rolesQuery = "DELETE FROM ix_squad_roles WHERE squad_id = " .. sql.SQLStr(squadID) .. " AND member_cid = " .. sql.SQLStr(tostring(characterID))
+    local rolesQuery = "DELETE FROM ix_squad_roles WHERE squad_id = " .. sql.SQLStr(squadID) .. " AND member_cid = " .. sql.SQLStr(characterID)
     local rolesSuccess = sql.Query(rolesQuery)
 
     if rolesSuccess == false then
@@ -241,7 +256,7 @@ net.Receive("ixSquadLeave", function(_, ply)
     local squadMembers = sql.Query(query)
 
     for _, member in ipairs(squadMembers) do
-        local player = GetPlayerByCharacterID(tonumber(member.member_cid))
+        local player = GetPlayerByCharacterID(member.member_cid)
 
         if IsValid(player) then
             local healthPercentage = (player:Health() / player:GetMaxHealth()) * 100
@@ -252,7 +267,7 @@ net.Receive("ixSquadLeave", function(_, ply)
     end
 
     for _, member in ipairs(squadMembers) do
-        local player = GetPlayerByCharacterID(tonumber(member.member_cid))
+        local player = GetPlayerByCharacterID(member.member_cid)
         if IsValid(player) then
             net.Start("ixSquadInfo")
             net.WriteString(squadMembers[1].squad_name)
@@ -270,7 +285,7 @@ end)
 
 net.Receive("ixGetSquadInfo", function(_, ply)
     local characterID = ply:GetCharacter():GetID()
-    local squadID = sql.QueryValue("SELECT squad_id FROM ix_squad_roles WHERE member_cid = " .. sql.SQLStr(tostring(characterID)))
+    local squadID = sql.QueryValue("SELECT squad_id FROM ix_squad_roles WHERE member_cid = " .. sql.SQLStr(characterID))
 
     if not squadID then
         return
@@ -290,7 +305,7 @@ net.Receive("ixGetSquadInfo", function(_, ply)
     end
 
     for _, member in ipairs(squadMembers) do
-        local player = GetPlayerByCharacterID(tonumber(member.member_cid))
+        local player = GetPlayerByCharacterID(member.member_cid)
 
         if IsValid(player) then
             local healthPercentage = (player:Health() / player:GetMaxHealth()) * 100
@@ -301,7 +316,7 @@ net.Receive("ixGetSquadInfo", function(_, ply)
     end
 
     for _, member in ipairs(squadMembers) do
-        local player = GetPlayerByCharacterID(tonumber(member.member_cid))
+        local player = GetPlayerByCharacterID(member.member_cid)
         if IsValid(player) then
             net.Start("ixSquadInfo")
             net.WriteString(squadMembers[1].squad_name)
@@ -339,7 +354,12 @@ net.Receive("ixSetSquadRole", function(_, ply)
         return
     end
 
-    local query = "UPDATE ix_squad_roles SET role = " .. sql.SQLStr(newRole) .. " WHERE member_cid = " .. sql.SQLStr(tostring(memberCid)) .. " AND squad_id = " .. sql.SQLStr(currentSquadID)
+    if characterID == memberCid then
+        ply:ChatPrint("You cannot change your own role.")
+        return
+    end
+
+    local query = "UPDATE ix_squad_roles SET role = " .. sql.SQLStr(newRole) .. " WHERE member_cid = " .. sql.SQLStr(memberCid) .. " AND squad_id = " .. sql.SQLStr(currentSquadID)
     local success = sql.Query(query)
 
     if success then

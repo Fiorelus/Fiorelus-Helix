@@ -1,5 +1,4 @@
 local squadFrame
-local squadList
 local isInSquad = false
 local memberPanels = {}
 
@@ -36,6 +35,36 @@ net.Receive("ixSquadUpdate", function()
 
     UpdateSquadData(squadName, updatedMembers)
 end)
+
+surface.CreateFont("SquadTitleFont", {
+    font = "Coolvetica",
+    size = 32,
+    weight = 700,
+})
+
+surface.CreateFont("SquadMemberFont", {
+    font = "Coolvetica",
+    size = 18,
+    weight = 500,
+})
+
+surface.CreateFont("SquadRoleFont", {
+    font = "Coolvetica",
+    size = 14,
+    weight = 500,
+})
+
+surface.CreateFont("SquadListFont", {
+    font = "Coolvetica",
+    size = 18,
+    weight = 500,
+})
+
+surface.CreateFont("SquadListHeaderFont", {
+    font = "Coolvetica",
+    size = 22,
+    weight = 700,
+})
 
 function CreateCustomFrame(message, title, confirmText, cancelText, confirmCallback, cancelCallback)
     local tempLabel = vgui.Create("DLabel")
@@ -229,6 +258,17 @@ local function GetRankAndLastName(name)
     return rank, lastName
 end
 
+local function GetPlayerByCharacterID(characterID)
+    characterID = tonumber(characterID)
+    for _, ply in pairs(player.GetAll()) do
+        local playerChar = ply:GetCharacter()
+        if playerChar and tonumber(playerChar:GetID()) == characterID then
+            return ply
+        end
+    end
+    return nil
+end
+
 local function DrawSquadOverlay()
     if squadData.name ~= "" and #squadData.members > 0 then
         isInSquad = true
@@ -266,22 +306,20 @@ local function DrawSquadOverlay()
 
         memberPanel.OnMousePressed = function(_, mouseCode)
             if mouseCode == MOUSE_RIGHT then
-                if member.cid ~= LocalPlayer():GetCharacter():GetID() then
-                    local menu = vgui.Create("DMenu", memberPanel)
-                    menu:AddOption("2IC", function()
-                        RequestSetSquadRole(member.member_cid, "2ic")
-                    end)
-                    menu:AddOption("Corpsman", function()
-                        RequestSetSquadRole(member.member_cid, "corpsman")
-                    end)
-                    menu:AddOption("Engineer", function()
-                        RequestSetSquadRole(member.member_cid, "engineer")
-                    end)
-                    menu:AddOption("Member", function()
-                        RequestSetSquadRole(member.member_cid, "member")
-                    end)
-                    menu:Open()
-                end
+                local menu = vgui.Create("DMenu", memberPanel)
+                menu:AddOption("2IC", function()
+                    RequestSetSquadRole(member.member_cid, "2ic")
+                end)
+                menu:AddOption("Corpsman", function()
+                    RequestSetSquadRole(member.member_cid, "corpsman")
+                end)
+                menu:AddOption("Engineer", function()
+                    RequestSetSquadRole(member.member_cid, "engineer")
+                end)
+                menu:AddOption("Member", function()
+                    RequestSetSquadRole(member.member_cid, "member")
+                end)
+                menu:Open()
             end
         end
 
@@ -316,8 +354,16 @@ local function DrawSquadOverlay()
         surface.DrawRect(x, y - 10, width, 2)
 
         for i, member in ipairs(squadData.members) do
-            local healthPercent = (member.health or 0)
-            local healthText = healthPercent > 1 and (healthPercent .. "%") or "CRIT"
+            local memberPlayer = GetPlayerByCharacterID(member.member_cid)
+
+            local healthPercent
+            if IsValid(memberPlayer) then
+                healthPercent = memberPlayer:Health()
+            else
+                healthPercent = member.health or 0
+            end
+
+            local healthText = healthPercent > 1 and (math.Round(healthPercent) .. "%") or "CRIT"
             local healthColor = (healthPercent == 0) and Color(255, 0, 0) or GetHealthColor(healthPercent)
 
             local rank, lastName = GetRankAndLastName(member.name)

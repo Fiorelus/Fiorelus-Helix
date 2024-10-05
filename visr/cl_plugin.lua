@@ -35,16 +35,16 @@ local function AddVISRHalo()
     end
 
     if #allies > 0 then
-        halo.Add(allies, HaloVISR.HueAlly, 2, 2, 1, true, false)
+        halo.Add(allies, HaloVISR.HueAlly, 0.5, 0.5, 6, true, false)
     end
     if #enemies > 0 then
-        halo.Add(enemies, HaloVISR.HueEnemy, 2, 2, 1, true, false)
+        halo.Add(enemies, HaloVISR.HueEnemy, 0.5, 0.5, 6, true, false)
     end
     if #corpses > 0 then
-        halo.Add(corpses, HaloVISR.HueCorpse, 2, 2, 1, true, false)
+        halo.Add(corpses, HaloVISR.HueCorpse, 0.5, 0.5, 6, true, false)
     end
     if #neutrals > 0 then
-        halo.Add(neutrals, HaloVISR.HueNeutral, 2, 2, 1, true, false)
+        halo.Add(neutrals, HaloVISR.HueNeutral, 0.5, 0.5, 6, true, false)
     end
 end
 
